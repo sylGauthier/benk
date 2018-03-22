@@ -1,0 +1,165 @@
+#!/bin/bash
+
+CARD_DIR="cards"
+DECKS="$(find -maxdepth 1 -type d | tail +2)"
+DATE_S="$(date +%s)"
+DATE_D="$((DATE_S/86400))"
+
+function get_time_interval() {
+    case "$1" in
+        1)
+            printf "1"
+            ;;
+        2)
+            printf "3"
+            ;;
+        3)
+            printf "7"
+            ;;
+        4)
+            printf "30"
+            ;;
+        5)
+            printf "90"
+            ;;
+        *)
+            printf "1"
+            ;;
+    esac
+}
+
+function load_box() {
+    TIME_INTERVAL="$(get_time_interval "$(basename "$1")")"
+    CARDS="$(find "$1" -type f)"
+
+    if [ -n "$CARDS" ] ; then
+        while read -r card; do
+            LAST_DATE_D="$(grep "date=" "$card" | cut -d= -f2-)"
+            LAST_TIME_D="$((DATE_D - LAST_DATE_D))"
+
+            if [ "$LAST_TIME_D" -ge "$TIME_INTERVAL" ] ; then
+                printf "$card\n"
+            fi
+        done <<< "$CARDS"
+    fi
+}
+
+function run_card() {
+    FRONT="$(grep "front=" "$1" | cut -d= -f2-)"
+    BACK="$(grep "back=" "$1" | cut -d= -f2-)"
+
+    printf "$FRONT\n"
+    printf "Press Enter to see other side..."
+    read < /dev/tty
+    printf "$BACK\n"
+    printf "Got it? [Y/n] "
+    read CHOICE < /dev/tty
+
+    sed -i -e "s/date=\([0-9]*\|never\)$/date=$DATE_D/" "$1"
+
+    if [ "$CHOICE" = "n" ] ; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+function move_card() {
+    CARD="$(basename "$1")"
+    BOX="$(basename "$(dirname "$1")")"
+    DECK="$(dirname "$(dirname "$1")")"
+
+    case "$2" in
+        up)
+            if [ "$BOX" -lt 5 ] ; then
+                BOX=$((BOX+1))
+                mv "$1" "$DECK/$BOX/"
+            fi
+            ;;
+        down)
+            if [ "$BOX" != 1 ] ; then
+                mv "$1" "$DECK/1/"
+            fi
+            ;;
+    esac
+    printf "$DECK/$BOX/$CARD"
+}
+
+function add_card() {
+    DIR="$CARD_DIR/$1/1"
+    CARDNAME="$(date +%y%m%d%H%M%S)"
+
+    printf "front=%s\nback=%s\ndate=never\n" "$2" "$3" > "$DIR/$CARDNAME"
+}
+
+function load_deck() {
+    DIR="$CARD_DIR/$1"
+    BOXES="$(find "$DIR" -maxdepth 1 -type d | tail +2 | sort -r)"
+    STACK=""
+
+    if [ ! -d "$DIR" ] ; then
+        printf "Error: deck doesn't exist\n"
+        exit 1
+    fi
+
+    while read -r box; do
+        TMP="$(load_box "$box")"
+        if [ -n "$TMP" ] ; then
+            STACK="$STACK$TMP\n"
+        fi
+    done <<< "$BOXES"
+
+    printf "$STACK"
+}
+
+case "$1" in
+    train)
+        STACK="$(load_deck "$2")"
+        if [ -n "$STACK" ] ; then
+            while [ -n "$STACK" ] ; do
+                printf "Stack:\n$STACK\n"
+                read card <<< "$STACK"
+                printf "Running card $card\n"
+                if ! run_card "$card" ; then
+                    card="$(move_card "$card" "down")"
+                    STACK="$STACK\n$card\n"
+                else
+                    move_card "$card" "up" > /dev/null
+                fi
+
+                STACK="$(printf "$STACK" | tail +2)"
+            done
+        else
+            printf "Nothing to learn today\n"
+            exit 0
+        fi
+        ;;
+    new)
+        mkdir "$CARD_DIR/$2"
+        for i in $(seq 1 5) ; do
+            mkdir "$CARD_DIR/$2/$i"
+        done
+        ;;
+    add)
+        printf "Adding new cards in deck $CARD_DIR/$2\n"
+        while true ; do
+            printf "Front:\n"
+            read FRONT
+            printf "Back:\n"
+            read BACK
+
+            if [ -n "$FRONT" -a -n "$BACK" ] ; then
+                add_card "$2" "$FRONT" "$BACK"
+            else
+                exit 0
+            fi
+        done
+        ;;
+    *)
+        printf "Usage: $0 <command>\n"
+        printf "Commands:\n"
+        printf "    train <deck>: train on the given card deck\n"
+        printf "    new <deck>: create a new deck with the specified name\n"
+        printf "    add <deck>: add cards to the new deck\n"
+        ;;
+esac
