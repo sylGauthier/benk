@@ -1,12 +1,18 @@
 #!/bin/bash
 
-CARD_DIR="cards"
+CARD_DIR="$HOME/cards"
+NB_CARDS_PER_DAY="50"
+
+
 DECKS="$(find -maxdepth 1 -type d | tail +2)"
 DATE_S="$(date +%s)"
 DATE_D="$((DATE_S/86400))"
 
 function get_time_interval() {
     case "$1" in
+        0)
+            printf "0"
+            ;;
         1)
             printf "1"
             ;;
@@ -86,7 +92,7 @@ function move_card() {
 }
 
 function add_card() {
-    DIR="$CARD_DIR/$1/1"
+    DIR="$CARD_DIR/$1/0"
     CARDNAME="$(date +%y%m%d%H%M%S)"
 
     printf "front=%s\nback=%s\ndate=never\n" "$2" "$3" > "$DIR/$CARDNAME"
@@ -114,46 +120,60 @@ function load_deck() {
 
 case "$1" in
     train)
-        STACK="$(load_deck "$2")"
-        if [ -n "$STACK" ] ; then
-            while [ -n "$STACK" ] ; do
-                printf "Stack:\n$STACK\n"
-                read card <<< "$STACK"
-                printf "Running card $card\n"
-                if ! run_card "$card" ; then
-                    card="$(move_card "$card" "down")"
-                    STACK="$STACK\n$card\n"
-                else
-                    move_card "$card" "up" > /dev/null
-                fi
+        if [ -d "$CARD_DIR/$2" ] ; then
+            STACK="$(load_deck "$2" | head -n "$NB_CARDS_PER_DAY")"
+            if [ -n "$STACK" ] ; then
+                while [ -n "$STACK" ] ; do
+                    read card <<< "$STACK"
+                    if ! run_card "$card" ; then
+                        card="$(move_card "$card" "down")"
+                        STACK="$STACK\n$card\n"
+                    else
+                        move_card "$card" "up" > /dev/null
+                    fi
 
-                STACK="$(printf "$STACK" | tail +2)"
-            done
+                    STACK="$(printf "$STACK" | tail +2)"
+                done
+            else
+                printf "Nothing to learn today\n"
+                exit 0
+            fi
         else
-            printf "Nothing to learn today\n"
-            exit 0
+            printf "Error: can't find deck $2\n"
         fi
         ;;
     new)
-        mkdir "$CARD_DIR/$2"
-        for i in $(seq 1 5) ; do
+        if ! [ -d "$CARD_DIR" ] ; then
+            printf "$CARD_DIR doesn't exist, should I create it ? [Y/n]"
+            read CHOICE
+            if [ "$CHOICE" = "n" ] ; then
+                printf "Error: can't continue without a valid CARD_DIR, please set it up.\n"
+                exit 1
+            fi
+        fi
+        mkdir -p "$CARD_DIR/$2"
+        for i in $(seq 0 5) ; do
             mkdir "$CARD_DIR/$2/$i"
         done
         ;;
     add)
-        printf "Adding new cards in deck $CARD_DIR/$2\n"
-        while true ; do
-            printf "Front:\n"
-            read FRONT
-            printf "Back:\n"
-            read BACK
+        if [ -d "$CARD_DIR/$2" ] ; then
+            printf "Adding new cards in deck $CARD_DIR/$2\n"
+            while true ; do
+                printf "Front:\n"
+                read FRONT
+                printf "Back:\n"
+                read BACK
 
-            if [ -n "$FRONT" -a -n "$BACK" ] ; then
-                add_card "$2" "$FRONT" "$BACK"
-            else
-                exit 0
-            fi
-        done
+                if [ -n "$FRONT" -a -n "$BACK" ] ; then
+                    add_card "$2" "$FRONT" "$BACK"
+                else
+                    exit 0
+                fi
+            done
+        else
+            printf "Error: can't find deck $2\n"
+        fi
         ;;
     *)
         printf "Usage: $0 <command>\n"
