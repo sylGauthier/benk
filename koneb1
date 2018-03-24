@@ -83,8 +83,8 @@ function move_card() {
             fi
             ;;
         down)
-            if [ "$BOX" != 1 ] ; then
-                mv "$1" "$DECK/1/"
+            if [ "$BOX" != 0 ] ; then
+                mv "$1" "$DECK/0/"
             fi
             ;;
     esac
