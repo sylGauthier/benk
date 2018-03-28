@@ -1,6 +1,10 @@
 # koneb1
 CLI flashcard program entirely written in bash
 
+*This program requires the color.sh script in your PATH*
+
+https://github.com/fx-carton/bash-scripts
+
 koneb1 is a (tentatively) suckless approach to flach card learning. It uses the Leitner system for an optimized learning schedule.
 
 The cards are simple text files containing the content of the front face, back face and the date at which it was lastly seen (the date is in number of days since 1970-01-01 for convenience.
