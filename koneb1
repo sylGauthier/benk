@@ -3,12 +3,15 @@
 source color.sh
 
 CARD_DIR="$HOME/cards"
-NB_CARDS_PER_DAY="50"
+NEW_CARDS_PER_DAY="10"
 
 
 DECKS="$(find -maxdepth 1 -type d | tail +2)"
 DATE_S="$(date +%s)"
 DATE_D="$((DATE_S/86400))"
+
+NONEW=""
+NOMOVE=""
 
 function get_time_interval() {
     case "$1" in
@@ -118,7 +121,11 @@ function load_deck() {
 
     while read -r box; do
         TMP="$(load_box "$box")"
+        if [ "$(basename "$box")" -eq "0" ] ; then
+            TMP="$(echo "$TMP" | head -n "$NEW_CARDS_PER_DAY")"
+        fi
         if [ -n "$TMP" ] ; then
+            echo "Loading $(echo "$TMP" | wc -l) from box $box" > /dev/tty
             STACK="$STACK$TMP\n"
         fi
     done <<< "$BOXES"
@@ -129,7 +136,7 @@ function load_deck() {
 case "$1" in
     train)
         if [ -d "$CARD_DIR/$2" ] ; then
-            STACK="$(load_deck "$2" | head -n "$NB_CARDS_PER_DAY")"
+            STACK="$(load_deck "$2")"
             if [ -n "$STACK" ] ; then
                 LEFT="$(wc -l <<< "$STACK")"
                 AGAIN="0"
