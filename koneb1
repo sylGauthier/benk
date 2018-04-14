@@ -3,7 +3,7 @@
 source color.sh
 
 CARD_DIR="$HOME/cards"
-NEW_CARDS_PER_DAY="10"
+NEW_CARDS_PER_DAY="20"
 
 
 DECKS="$(find -maxdepth 1 -type d | tail +2)"
@@ -28,10 +28,10 @@ function get_time_interval() {
             printf "7"
             ;;
         4)
-            printf "30"
+            printf "15"
             ;;
         5)
-            printf "90"
+            printf "30"
             ;;
         *)
             printf "1"
@@ -45,7 +45,7 @@ function load_box() {
 
     if [ -n "$CARDS" ] ; then
         while read -r card; do
-            LAST_DATE_D="$(grep "date=" "$card" | cut -d= -f2-)"
+            LAST_DATE_D="$(sed -e '3!d' "$card")"
             LAST_TIME_D="$((DATE_D - LAST_DATE_D))"
 
             if [ "$LAST_TIME_D" -ge "$TIME_INTERVAL" ] ; then
@@ -56,8 +56,8 @@ function load_box() {
 }
 
 function run_card() {
-    FRONT="$(grep "front=" "$1" | cut -d= -f2-)"
-    BACK="$(grep "back=" "$1" | cut -d= -f2-)"
+    FRONT="$(sed -e '1!d' "$1")"
+    BACK="$(sed -e '2!d' "$1")"
 
     set_fg "$COLOR_YELLOW"
     printf "$FRONT"
@@ -71,7 +71,7 @@ function run_card() {
     reset_bold
     read CHOICE < /dev/tty
 
-    sed -i -e "s/date=\([0-9]*\|never\)$/date=$DATE_D/" "$1"
+    sed -i "3s/.*$/$DATE_D/" "$1"
 
     if [ "$CHOICE" = "n" ] ; then
         return 1
@@ -106,12 +106,12 @@ function add_card() {
     DIR="$CARD_DIR/$1/0"
     CARDNAME="$(date +%y%m%d%H%M%S)"
 
-    printf "front=%s\nback=%s\ndate=never\n" "$2" "$3" > "$DIR/$CARDNAME"
+    printf "%s\n%s\nnever\n" "$2" "$3" > "$DIR/$CARDNAME"
 }
 
 function load_deck() {
     DIR="$CARD_DIR/$1"
-    BOXES="$(find "$DIR" -maxdepth 1 -type d | tail +2 | sort -r)"
+    BOXES="$(for i in $(seq 5 -1 0) ; do echo "$CARD_DIR/$1/$i" ; done)"
     STACK=""
 
     if [ ! -d "$DIR" ] ; then
@@ -144,15 +144,11 @@ case "$1" in
                 while [ -n "$STACK" ] ; do
                     read card <<< "$STACK"
                     set_bold
-                    printf "["
-                    set_fg "$COLOR_BLUE"
-                    printf "$LEFT"
-                    reset_fg
-                    printf "|"
-                    set_fg "$COLOR_RED"
-                    printf "$AGAIN"
-                    reset_fg
-                    printf "]\n"
+                        printf "["
+                        set_fg "$COLOR_BLUE" ; printf "$LEFT" ; reset_fg
+                        printf "|"
+                        set_fg "$COLOR_RED" ; printf "$AGAIN" ; reset_fg
+                        printf "]\n"
                     reset_bold
                     if ! run_card "$card" ; then
                         card="$(move_card "$card" "down")"
@@ -210,6 +206,19 @@ case "$1" in
             done
         else
             printf "Error: can't find deck $2\n"
+        fi
+        ;;
+    search)
+        if [ -d "$CARD_DIR/$2" ] ; then
+            if [ -n "$3" ] ; then
+                RES="$(grep -r "$3" "$CARD_DIR/$2/"[0-5] | cut -d: -f1)"
+                for i in $RES ; do
+                    set_bold
+                    printf "$i:\n"
+                    reset_bold
+                    cat "$i"
+                done
+            fi
         fi
         ;;
     *)
