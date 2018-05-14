@@ -12,35 +12,10 @@ DATE_D="$((DATE_S/86400))"
 
 NONEW=""
 NOMOVE=""
-
-function get_time_interval() {
-    case "$1" in
-        0)
-            printf "0"
-            ;;
-        1)
-            printf "1"
-            ;;
-        2)
-            printf "3"
-            ;;
-        3)
-            printf "7"
-            ;;
-        4)
-            printf "15"
-            ;;
-        5)
-            printf "30"
-            ;;
-        *)
-            printf "1"
-            ;;
-    esac
-}
+BOXES=""
 
 function load_box() {
-    TIME_INTERVAL="$(get_time_interval "$(basename "$1")")"
+    TIME_INTERVAL="$(basename "$1")"
     CARDS="$(find "$1" -type f)"
 
     if [ -n "$CARDS" ] ; then
@@ -84,11 +59,25 @@ function move_card() {
     CARD="$(basename "$1")"
     BOX="$(basename "$(dirname "$1")")"
     DECK="$(dirname "$(dirname "$1")")"
+    
+    if [ -z "$BOXES" ] ; then
+        printf "Error: can't move card, no boxes loaded\n" > /dev/tty
+        return 1
+    fi
+
+    NEXT_BOX="9999999"
+
+    for i in $BOXES ; do
+        BOX_NB="$(basename "$i")"
+        if [ "$BOX_NB" -lt "$NEXT_BOX" -a "$BOX_NB" -gt "$BOX" ] ; then
+            NEXT_BOX="$BOX_NB"
+        fi
+    done
 
     case "$2" in
         up)
-            if [ "$BOX" -lt 5 ] ; then
-                BOX=$((BOX+1))
+            if [ "$NEXT_BOX" -lt 9999999 ] ; then
+                BOX="$NEXT_BOX"
                 mv "$1" "$DECK/$BOX/"
             fi
             ;;
@@ -111,7 +100,6 @@ function add_card() {
 
 function load_deck() {
     DIR="$CARD_DIR/$1"
-    BOXES="$(for i in $(seq 5 -1 0) ; do echo "$CARD_DIR/$1/$i" ; done)"
     STACK=""
 
     if [ ! -d "$DIR" ] ; then
@@ -136,6 +124,7 @@ function load_deck() {
 case "$1" in
     train)
         if [ -d "$CARD_DIR/$2" ] ; then
+            BOXES="$(find "$CARD_DIR/$2" -type d -regex "$CARD_DIR/$2/[0-9]*")"
             STACK="$(load_deck "$2")"
             if [ -n "$STACK" ] ; then
                 LEFT="$(wc -l <<< "$STACK")"
@@ -211,7 +200,7 @@ case "$1" in
     search)
         if [ -d "$CARD_DIR/$2" ] ; then
             if [ -n "$3" ] ; then
-                RES="$(grep -r "$3" "$CARD_DIR/$2/"[0-5] | cut -d: -f1)"
+                RES="$(grep -r "$3" --exclude-dir=.git | cut -d: -f1)"
                 for i in $RES ; do
                     set_bold
                     printf "$i:\n"
@@ -227,5 +216,6 @@ case "$1" in
         printf "    train <deck>: train on the given card deck\n"
         printf "    new <deck>: create a new deck with the specified name\n"
         printf "    add <deck>: add cards to the new deck\n"
+        printf "    search <deck> <expr>: displays all cards matching <expr>\n"
         ;;
 esac
