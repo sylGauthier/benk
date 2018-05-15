@@ -200,7 +200,7 @@ case "$1" in
     search)
         if [ -d "$CARD_DIR/$2" ] ; then
             if [ -n "$3" ] ; then
-                RES="$(grep -r "$3" --exclude-dir=.git | cut -d: -f1)"
+                RES="$(grep -r "$3" "$CARD_DIR/$2" --exclude-dir=".git" | cut -d: -f1)"
                 for i in $RES ; do
                     set_bold
                     printf "$i:\n"
