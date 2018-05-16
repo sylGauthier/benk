@@ -1,4 +1,5 @@
-# koneb1 CLI flashcard program entirely written in bash
+# koneb1
+CLI flashcard program entirely written in bash
 
 *This program requires the color.sh script in your PATH*
 
