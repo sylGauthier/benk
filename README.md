@@ -3,7 +3,7 @@ CLI flashcard program entirely written in bash
 
 *This program requires the color.sh script in your PATH*
 
-https://github.com/fx-carton/bash-scripts
+https://framagit.org/fxcarton/bash-scripts
 
 koneb1 is a (tentatively) suckless approach to flach card learning. It uses the
 Leitner system for an optimized learning schedule.
