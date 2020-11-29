@@ -121,101 +121,121 @@ benk_load_deck() {
     printf "$STACK"
 }
 
-case "$1" in
-    train)
-        if [ -d "$CARD_DIR/$2" ] ; then
-            BOXES="$(find "$CARD_DIR/$2" -type d -regex "$CARD_DIR/$2/[0-9]*")"
-            STACK="$(benk_load_deck "$2")"
-            if [ -n "$STACK" ] ; then
-                LEFT="$(wc -l <<< "$STACK")"
-                AGAIN="0"
+benk_train() {
+    if [ -d "$CARD_DIR/$1" ] ; then
+        BOXES="$(find "$CARD_DIR/$1" -type d -regex "$CARD_DIR/$1/[0-9]*")"
+        STACK="$(benk_load_deck "$1")"
+        if [ -n "$STACK" ] ; then
+            LEFT="$(wc -l <<< "$STACK")"
+            AGAIN="0"
 
-                while [ -n "$STACK" ] ; do
-                    read card <<< "$STACK"
-                    set_bold
-                        printf "["
-                        set_fg "$COLOR_BLUE" ; printf "$LEFT" ; reset_fg
-                        printf "|"
-                        set_fg "$COLOR_RED" ; printf "$AGAIN" ; reset_fg
-                        printf "]\n"
-                    reset_bold
-                    if ! benk_run_card "$card" ; then
-                        card="$(benk_move_card "$card" "down")"
-                        STACK="$STACK\n$card\n"
-                        AGAIN="$((AGAIN+1))"
-                    else
-                        benk_move_card "$card" "up" > /dev/null
-                    fi
-
-                    STACK="$(printf "$STACK" | tail +2)"
-                    LEFT="$((LEFT-1))"
-
-                    if [ "$LEFT" = "0" ] ; then
-                        LEFT="$AGAIN"
-                        AGAIN="0"
-                    fi
-                done
-            else
-                printf "Nothing to learn today\n"
-                exit 0
-            fi
-        else
-            printf "Error: can't find deck $2\n"
-            exit 1
-        fi
-        ;;
-    new)
-        if ! [ -d "$CARD_DIR" ] ; then
-            printf "$CARD_DIR doesn't exist, should I create it ? [Y/n]"
-            read CHOICE
-            if [ "$CHOICE" = "n" ] ; then
-                printf "Error: can't continue without a valid CARD_DIR, please set it up.\n"
-                exit 1
-            fi
-        fi
-        mkdir -p "$CARD_DIR/$2"
-        for i in $(seq 0 5) ; do
-            mkdir "$CARD_DIR/$2/$i"
-        done
-        ;;
-    add)
-        if [ -d "$CARD_DIR/$2" ] ; then
-            printf "Adding new cards in deck $CARD_DIR/$2\n"
-            while true ; do
-                printf "Front:\n"
-                read FRONT
-                printf "Back:\n"
-                read BACK
-
-                if [ -n "$FRONT" -a -n "$BACK" ] ; then
-                    benk_add_card "$2" "$FRONT" "$BACK"
+            while [ -n "$STACK" ] ; do
+                read card <<< "$STACK"
+                set_bold
+                printf "["
+                set_fg "$COLOR_BLUE" ; printf "$LEFT" ; reset_fg
+                printf "|"
+                set_fg "$COLOR_RED" ; printf "$AGAIN" ; reset_fg
+                printf "]\n"
+                reset_bold
+                if ! benk_run_card "$card" ; then
+                    card="$(benk_move_card "$card" "down")"
+                    STACK="$STACK\n$card\n"
+                    AGAIN="$((AGAIN+1))"
                 else
-                    exit 0
+                    benk_move_card "$card" "up" > /dev/null
+                fi
+
+                STACK="$(printf "$STACK" | tail +2)"
+                LEFT="$((LEFT-1))"
+
+                if [ "$LEFT" = "0" ] ; then
+                    LEFT="$AGAIN"
+                    AGAIN="0"
                 fi
             done
         else
-            printf "Error: can't find deck $2\n"
+            printf "Nothing to learn today\n"
+            exit 0
         fi
+    else
+        printf "Error: can't find deck $1\n"
+        exit 1
+    fi
+}
+
+benk_new() {
+    if ! [ -d "$CARD_DIR" ] ; then
+        printf "$CARD_DIR doesn't exist, should I create it ? [Y/n]"
+        read CHOICE
+        if [ "$CHOICE" = "n" ] ; then
+            printf "Error: can't continue without a valid CARD_DIR, please set it up.\n"
+            exit 1
+        fi
+    fi
+    mkdir -p "$CARD_DIR/$1"
+    for i in $(seq 0 5) ; do
+        mkdir "$CARD_DIR/$2/$i"
+    done
+}
+
+benk_add() {
+    if [ -d "$CARD_DIR/$1" ] ; then
+        printf "Adding new cards in deck $CARD_DIR/$1\n"
+        while true ; do
+            printf "Front:\n"
+            read FRONT
+            printf "Back:\n"
+            read BACK
+
+            if [ -n "$FRONT" -a -n "$BACK" ] ; then
+                benk_add_card "$1" "$FRONT" "$BACK"
+            else
+                exit 0
+            fi
+        done
+    else
+        printf "Error: can't find deck $1\n"
+    fi
+}
+
+benk_search() {
+    if [ -d "$CARD_DIR/$1" ] ; then
+        if [ -n "$2" ] ; then
+            RES="$(grep -r "$2" "$CARD_DIR/$1" --exclude-dir=".git" | cut -d: -f1)"
+            for i in $RES ; do
+                set_bold
+                printf "$i:\n"
+                reset_bold
+                cat "$i"
+            done
+        fi
+    fi
+}
+
+benk_help() {
+    printf "Usage: $0 <command>\n"
+    printf "Commands:\n"
+    printf "    train <deck>: train on the given card deck\n"
+    printf "    new <deck>: create a new deck with the specified name\n"
+    printf "    add <deck>: add cards to the new deck\n"
+    printf "    search <deck> <expr>: displays all cards matching <expr>\n"
+}
+
+case "$1" in
+    train)
+        benk_train "$2"
+        ;;
+    new)
+        benk_new "$2"
+        ;;
+    add)
+        benk_add "$2"
         ;;
     search)
-        if [ -d "$CARD_DIR/$2" ] ; then
-            if [ -n "$3" ] ; then
-                RES="$(grep -r "$3" "$CARD_DIR/$2" --exclude-dir=".git" | cut -d: -f1)"
-                for i in $RES ; do
-                    set_bold
-                    printf "$i:\n"
-                    reset_bold
-                    cat "$i"
-                done
-            fi
-        fi
+        benk_search "$2" "$3"
         ;;
     *)
-        printf "Usage: $0 <command>\n"
-        printf "Commands:\n"
-        printf "    train <deck>: train on the given card deck\n"
-        printf "    new <deck>: create a new deck with the specified name\n"
-        printf "    add <deck>: add cards to the new deck\n"
-        printf "    search <deck> <expr>: displays all cards matching <expr>\n"
+        benk_help
         ;;
 esac
