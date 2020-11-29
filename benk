@@ -14,7 +14,7 @@ NONEW=""
 NOMOVE=""
 BOXES=""
 
-function load_box() {
+benk_load_box() {
     TIME_INTERVAL="$(basename "$1")"
     CARDS="$(find "$1" -type f)"
 
@@ -30,7 +30,7 @@ function load_box() {
     fi
 }
 
-function run_card() {
+benk_run_card() {
     FRONT="$(sed -e '1!d' "$1")"
     BACK="$(sed -e '2!d' "$1")"
 
@@ -55,7 +55,7 @@ function run_card() {
     fi
 }
 
-function move_card() {
+benk_move_card() {
     CARD="$(basename "$1")"
     BOX="$(basename "$(dirname "$1")")"
     DECK="$(dirname "$(dirname "$1")")"
@@ -91,14 +91,14 @@ function move_card() {
     printf "$DECK/$BOX/$CARD"
 }
 
-function add_card() {
+benk_add_card() {
     DIR="$CARD_DIR/$1/0"
     CARDNAME="$(date +%y%m%d%H%M%S)"
 
     printf "%s\n%s\nnever\n" "$2" "$3" > "$DIR/$CARDNAME"
 }
 
-function load_deck() {
+benk_load_deck() {
     DIR="$CARD_DIR/$1"
     STACK=""
 
@@ -108,7 +108,7 @@ function load_deck() {
     fi
 
     while read -r box; do
-        TMP="$(load_box "$box")"
+        TMP="$(benk_load_box "$box")"
         if [ "$(basename "$box")" -eq "0" ] ; then
             TMP="$(echo "$TMP" | head -n "$NEW_CARDS_PER_DAY")"
         fi
@@ -125,7 +125,7 @@ case "$1" in
     train)
         if [ -d "$CARD_DIR/$2" ] ; then
             BOXES="$(find "$CARD_DIR/$2" -type d -regex "$CARD_DIR/$2/[0-9]*")"
-            STACK="$(load_deck "$2")"
+            STACK="$(benk_load_deck "$2")"
             if [ -n "$STACK" ] ; then
                 LEFT="$(wc -l <<< "$STACK")"
                 AGAIN="0"
@@ -139,12 +139,12 @@ case "$1" in
                         set_fg "$COLOR_RED" ; printf "$AGAIN" ; reset_fg
                         printf "]\n"
                     reset_bold
-                    if ! run_card "$card" ; then
-                        card="$(move_card "$card" "down")"
+                    if ! benk_run_card "$card" ; then
+                        card="$(benk_move_card "$card" "down")"
                         STACK="$STACK\n$card\n"
                         AGAIN="$((AGAIN+1))"
                     else
-                        move_card "$card" "up" > /dev/null
+                        benk_move_card "$card" "up" > /dev/null
                     fi
 
                     STACK="$(printf "$STACK" | tail +2)"
@@ -188,7 +188,7 @@ case "$1" in
                 read BACK
 
                 if [ -n "$FRONT" -a -n "$BACK" ] ; then
-                    add_card "$2" "$FRONT" "$BACK"
+                    benk_add_card "$2" "$FRONT" "$BACK"
                 else
                     exit 0
                 fi
