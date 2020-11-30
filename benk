@@ -174,7 +174,7 @@ benk_new() {
         fi
     fi
     mkdir -p "$CARD_DIR/$1"
-    for i in $(seq 0 5) ; do
+    for i in 0 1 2 5 10 25 ; do
         mkdir "$CARD_DIR/$2/$i"
     done
 }
