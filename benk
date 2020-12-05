@@ -2,9 +2,7 @@
 
 source color.sh
 
-CARD_DIR="$HOME/cards"
 NEW_CARDS_PER_DAY="20"
-
 
 DECKS="$(find -maxdepth 1 -type d | tail +2)"
 DATE_S="$(date +%s)"
@@ -14,19 +12,10 @@ NONEW=""
 NOMOVE=""
 BOXES=""
 
-benk_load_box() {
-    TIME_INTERVAL="$(basename "$1")"
-    CARDS="$(find "$1" -type f)"
-
-    if [ -n "$CARDS" ] ; then
-        while read -r card; do
-            LAST_DATE_D="$(sed -e '3!d' "$card")"
-            LAST_TIME_D="$((DATE_D - LAST_DATE_D))"
-
-            if [ "$LAST_TIME_D" -ge "$TIME_INTERVAL" ] ; then
-                printf "$card\n"
-            fi
-        done <<< "$CARDS"
+is_benk_directory() {
+    if [ ! -d 0 ] ; then
+        printf "This doesn't look like a benk directory\n"
+        return 1
     fi
 }
 
@@ -56,9 +45,8 @@ benk_run_card() {
 }
 
 benk_move_card() {
-    CARD="$(basename "$1")"
-    BOX="$(basename "$(dirname "$1")")"
-    DECK="$(dirname "$(dirname "$1")")"
+    CARD="${1##*/}"
+    BOX="${1%/*}"
     
     if [ -z "$BOXES" ] ; then
         printf "Error: can't move card, no boxes loaded\n" > /dev/tty
@@ -68,7 +56,7 @@ benk_move_card() {
     NEXT_BOX="9999999"
 
     for i in $BOXES ; do
-        BOX_NB="$(basename "$i")"
+        BOX_NB="${i##*/}"
         if [ "$BOX_NB" -lt "$NEXT_BOX" -a "$BOX_NB" -gt "$BOX" ] ; then
             NEXT_BOX="$BOX_NB"
         fi
@@ -78,34 +66,37 @@ benk_move_card() {
         up)
             if [ "$NEXT_BOX" -lt 9999999 ] ; then
                 BOX="$NEXT_BOX"
-                mv "$1" "$DECK/$BOX/"
+                mv "$1" "$BOX"
             fi
             ;;
         down)
             if [ "$BOX" != 0 ] ; then
                 BOX="0"
-                mv "$1" "$DECK/$BOX/"
+                mv "$1" "$BOX/"
             fi
             ;;
     esac
-    printf "$DECK/$BOX/$CARD"
+    printf "$BOX/$CARD"
 }
 
-benk_add_card() {
-    DIR="$CARD_DIR/$1/0"
-    CARDNAME="$(date +%y%m%d%H%M%S)"
+benk_load_box() {
+    TIME_INTERVAL="$(basename "$1")"
+    CARDS="$(find "$1" -type f)"
 
-    printf "%s\n%s\nnever\n" "$2" "$3" > "$DIR/$CARDNAME"
+    if [ -n "$CARDS" ] ; then
+        while read -r card; do
+            LAST_DATE_D="$(sed -e '3!d' "$card")"
+            LAST_TIME_D="$((DATE_D - LAST_DATE_D))"
+
+            if [ "$LAST_TIME_D" -ge "$TIME_INTERVAL" ] ; then
+                printf "$card\n"
+            fi
+        done <<< "$CARDS"
+    fi
 }
 
 benk_load_deck() {
-    DIR="$CARD_DIR/$1"
     STACK=""
-
-    if [ ! -d "$DIR" ] ; then
-        printf "Error: deck doesn't exist\n"
-        exit 1
-    fi
 
     while read -r box; do
         TMP="$(benk_load_box "$box")"
@@ -117,99 +108,92 @@ benk_load_deck() {
             STACK="$STACK$TMP\n"
         fi
     done <<< "$BOXES"
-
     printf "$STACK"
 }
 
+benk_select_boxes() {
+    BOXES="$(find . -type d | grep -o "[0-9]*")"
+    test -n "$BOXES" || return 1
+}
+
 benk_train() {
-    if [ -d "$CARD_DIR/$1" ] ; then
-        BOXES="$(find "$CARD_DIR/$1" -type d -regex "$CARD_DIR/$1/[0-9]*")"
-        STACK="$(benk_load_deck "$1")"
-        if [ -n "$STACK" ] ; then
-            LEFT="$(wc -l <<< "$STACK")"
-            AGAIN="0"
+    is_benk_directory || return 1
+    benk_select_boxes || return 1
+    STACK="$(benk_load_deck)"
 
-            while [ -n "$STACK" ] ; do
-                read card <<< "$STACK"
-                set_bold
-                printf "["
-                set_fg "$COLOR_BLUE" ; printf "$LEFT" ; reset_fg
-                printf "|"
-                set_fg "$COLOR_RED" ; printf "$AGAIN" ; reset_fg
-                printf "]\n"
-                reset_bold
-                if ! benk_run_card "$card" ; then
-                    card="$(benk_move_card "$card" "down")"
-                    STACK="$STACK\n$card\n"
-                    AGAIN="$((AGAIN+1))"
-                else
-                    benk_move_card "$card" "up" > /dev/null
-                fi
+    if [ -n "$STACK" ] ; then
+        LEFT="$(wc -l <<< "$STACK")"
+        AGAIN="0"
 
-                STACK="$(printf "$STACK" | tail +2)"
-                LEFT="$((LEFT-1))"
-
-                if [ "$LEFT" = "0" ] ; then
-                    LEFT="$AGAIN"
-                    AGAIN="0"
-                fi
-            done
-        else
-            printf "Nothing to learn today\n"
-            exit 0
-        fi
-    else
-        printf "Error: can't find deck $1\n"
-        exit 1
-    fi
-}
-
-benk_new() {
-    if ! [ -d "$CARD_DIR" ] ; then
-        printf "$CARD_DIR doesn't exist, should I create it ? [Y/n]"
-        read CHOICE
-        if [ "$CHOICE" = "n" ] ; then
-            printf "Error: can't continue without a valid CARD_DIR, please set it up.\n"
-            exit 1
-        fi
-    fi
-    mkdir -p "$CARD_DIR/$1"
-    for i in 0 1 2 5 10 25 ; do
-        mkdir "$CARD_DIR/$2/$i"
-    done
-}
-
-benk_add() {
-    if [ -d "$CARD_DIR/$1" ] ; then
-        printf "Adding new cards in deck $CARD_DIR/$1\n"
-        while true ; do
-            printf "Front:\n"
-            read FRONT
-            printf "Back:\n"
-            read BACK
-
-            if [ -n "$FRONT" -a -n "$BACK" ] ; then
-                benk_add_card "$1" "$FRONT" "$BACK"
+        while [ -n "$STACK" ] ; do
+            read card <<< "$STACK"
+            set_bold
+            printf "["
+            set_fg "$COLOR_BLUE" ; printf "$LEFT" ; reset_fg
+            printf "|"
+            set_fg "$COLOR_RED" ; printf "$AGAIN" ; reset_fg
+            printf "]\n"
+            reset_bold
+            if ! benk_run_card "$card" ; then
+                card="$(benk_move_card "$card" "down")"
+                STACK="$STACK\n$card\n"
+                AGAIN="$((AGAIN+1))"
             else
-                exit 0
+                benk_move_card "$card" "up" > /dev/null
+            fi
+
+            STACK="$(printf "$STACK" | tail +2)"
+            LEFT="$((LEFT-1))"
+
+            if [ "$LEFT" = "0" ] ; then
+                LEFT="$AGAIN"
+                AGAIN="0"
             fi
         done
     else
-        printf "Error: can't find deck $1\n"
+        printf "Nothing to learn today\n"
+        exit 0
     fi
 }
 
-benk_search() {
-    if [ -d "$CARD_DIR/$1" ] ; then
-        if [ -n "$2" ] ; then
-            RES="$(grep -r "$2" "$CARD_DIR/$1" --exclude-dir=".git" | cut -d: -f1)"
-            for i in $RES ; do
-                set_bold
-                printf "$i:\n"
-                reset_bold
-                cat "$i"
-            done
+benk_init() {
+    for i in 0 1 2 5 10 25 ; do
+        mkdir "$i" || return 1
+    done
+}
+
+benk_add_card() {
+    CARDNAME="$(date +%y%m%d%H%M%S)"
+
+    printf "%s\n%s\nnever\n" "$1" "$2" > "0/$CARDNAME"
+}
+
+benk_add() {
+    is_benk_directory || return 1
+
+    while true ; do
+        printf "Front:\n"
+        read FRONT
+        printf "Back:\n"
+        read BACK
+
+        if [ -n "$FRONT" -a -n "$BACK" ] ; then
+            benk_add_card "$FRONT" "$BACK"
+        else
+            exit 0
         fi
+    done
+}
+
+benk_search() {
+    if [ -n "$1" ] ; then
+        RES="$(grep -r "$1" --exclude-dir=".git" | cut -d: -f1)"
+        for i in $RES ; do
+            set_bold
+            printf "$i:\n"
+            reset_bold
+            cat "$i"
+        done
     fi
 }
 
@@ -223,17 +207,17 @@ benk_help() {
 }
 
 case "$1" in
+    init)
+        benk_init "$2"
+        ;;
     train)
         benk_train "$2"
-        ;;
-    new)
-        benk_new "$2"
         ;;
     add)
         benk_add "$2"
         ;;
     search)
-        benk_search "$2" "$3"
+        benk_search "$3"
         ;;
     *)
         benk_help
