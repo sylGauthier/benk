@@ -19,15 +19,30 @@ is_benk_directory() {
     fi
 }
 
+benk_disp() {
+    if echo "$1" | grep -q "^\[.*\]$" ; then
+        if [ -z "$OPENER" ] ; then
+            reset_fg
+            printf "Error: please set OPENER env variable to open the card file\n"
+            printf "OPENER must contain the command to open the associated file without forking\n"
+            exit 1
+        fi
+        file="$(echo "$1" | sed -e "s/^\[\(.*\)\]$/\1/g")"
+        $OPENER "$file"
+    else
+        printf "$1"
+        read
+    fi
+}
+
 benk_run_card() {
     FRONT="$(sed -e '1!d' "$1")"
     BACK="$(sed -e '2!d' "$1")"
 
     set_fg "$COLOR_YELLOW"
-    printf "$FRONT"
-    read < /dev/tty
+    benk_disp "$FRONT"
     set_fg "$COLOR_GREEN"
-    printf "$BACK\n"
+    benk_disp "$BACK"
     reset_fg
     printf "Got it? "
     set_bold
@@ -205,6 +220,8 @@ benk_help() {
     printf "    add <deck>: add cards to the new deck\n"
     printf "    search <deck> <expr>: displays all cards matching <expr>\n"
 }
+
+test -f "config" && source config
 
 case "$1" in
     init)
