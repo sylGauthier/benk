@@ -127,7 +127,7 @@ benk_load_deck() {
 }
 
 benk_select_boxes() {
-    BOXES="$(find . -type d | grep -o "[0-9]*")"
+    BOXES="$(find . -maxdepth 1 -type d | grep -o "[0-9]*")"
     test -n "$BOXES" || return 1
 }
 
